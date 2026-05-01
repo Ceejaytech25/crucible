@@ -651,6 +651,38 @@ Seeds are idempotent and safe to run multiple times:
 run_all(&pool).await?;
 ```
 
+
+## Test Utilities
+
+The `test_utils` module includes upstream mocks plus fixture factories for backend tests. The factory API creates consistent domain objects while allowing per-test customization.
+
+```rust
+use backend::test_utils::{build_order, build_product, build_session, build_user, OrderItem};
+use uuid::Uuid;
+
+let user = build_user()
+    .email("user@example.com")
+    .is_admin(true)
+    .finish();
+
+let product = build_product()
+    .name("New Product")
+    .price_cents(2999)
+    .finish();
+
+let order = build_order()
+    .user_id(user.id)
+    .add_item(OrderItem::new(product.id, product.name.clone(), 2, product.price_cents))
+    .finish();
+
+let session = build_session()
+    .user_id(user.id)
+    .expires_in_days(30)
+    .finish();
+```
+
+Factory helpers are re-exported from `backend::test_utils`, including `create_user`, `create_order`, `create_product`, `create_session`, and their builder/customization variants.
+
 ### Unit tests only
 ```bash
 cargo test -p backend --lib
