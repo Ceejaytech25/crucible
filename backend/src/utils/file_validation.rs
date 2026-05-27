@@ -166,20 +166,39 @@ fn sanitize_file_name(name: &str) -> Result<String, FileError> {
 
 /// Detect MIME type from magic bytes.
 fn detect_mime(bytes: &[u8]) -> Option<&'static str> {
-    match bytes {
-        // WebAssembly magic: \0asm
-        [0x00, 0x61, 0x73, 0x6d, ..] => Some("application/wasm"),
-        // JSON: starts with `{` or `[` (after optional whitespace)
-        _ if bytes.iter().position(|b| !b.is_ascii_whitespace())
-            .map(|i| bytes[i] == b'{' || bytes[i] == b'[')
-            .unwrap_or(false) =>
-        {
-            Some("application/json")
-        }
-        // UTF-8 text (BOM or printable ASCII)
-        [0xEF, 0xBB, 0xBF, ..] => Some("text/plain"),
-        _ if bytes.iter().all(|b| b.is_ascii()) => Some("text/plain"),
-        _ => None,
+    // WebAssembly magic: \0asm
+    if bytes.starts_with(&[0x00, 0x61, 0x73, 0x6d]) {
+        return Some("application/wasm");
+    }
+
+    let data = if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        &bytes[3..]
+    } else {
+        bytes
+    };
+
+    if data
+        .iter()
+        .position(|b| !b.is_ascii_whitespace())
+        .map(|i| matches!(data[i], b'{' | b'['))
+        .unwrap_or(false)
+    {
+        return Some("application/json");
+    }
+
+    if is_valid_text(bytes) {
+        return Some("text/plain");
+    }
+
+    Some("application/octet-stream")
+}
+
+fn is_valid_text(bytes: &[u8]) -> bool {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.chars().all(|c| {
+            c == '\n' || c == '\r' || c == '\t' || !c.is_control()
+        }),
+        Err(_) => false,
     }
 }
 

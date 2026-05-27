@@ -6,9 +6,16 @@ High-performance Rust backend for Log-Based Alerting.
 - **Axum**: High-performance web framework.
 - **SQLx**: Async PostgreSQL driver with compile-time checked queries.
 - **Redis**: Caching and threshold tracking.
+- **Upload Validation**: Safe file upload validation with size, name, and MIME checks.
 - **Tracing**: Observability and structured logging.
+- **Error Handling**: Structured `AppError` responses for HTTP clients.
 
 ## API Endpoints
+
+### Health & Observability
+- `GET /health/live` - Liveness probe for process health.
+- `GET /health/ready` - Readiness probe for PostgreSQL + Redis connectivity.
+- `GET /metrics` - Prometheus metrics exposition endpoint.
 
 ### Rules Management
 - `GET /api/alerts/rules` - List all alerting rules.
