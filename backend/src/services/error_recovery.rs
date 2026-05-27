@@ -3,10 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::RwLock;
-use tracing::{error, info, warn};
 use tracing::{error, info, warn, instrument};
-use thiserror::Error;
-use serde::{Serialize, Deserialize};
 use crate::services::tracing::TracingService;
 
 #[derive(Error, Debug, Serialize, Deserialize)]
@@ -46,11 +43,6 @@ impl ErrorManager {
         }
     }
 
-    pub async fn handle_error(
-        &self,
-        error: RecoveryError,
-        task_name: &str,
-    ) -> Result<(), RecoveryError> {
     #[instrument(skip(self), fields(service.name = "ErrorManager", service.method = "handle_error"))]
     pub async fn handle_error(&self, error: RecoveryError, task_name: &str) -> Result<(), RecoveryError> {
         let span = TracingService::service_method_span("ErrorManager", "handle_error");

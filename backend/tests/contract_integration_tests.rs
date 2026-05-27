@@ -14,9 +14,12 @@ use backend::config::AppConfig;
 #[tokio::test]
 async fn test_system_status_contract() {
     let state = Arc::new(AppState {
+        db: None,
         metrics_exporter: Arc::new(MetricsExporter::new()),
         error_manager: Arc::new(ErrorManager::new()),
         config_manager: Arc::new(ConfigManager::new(AppConfig::default())),
+        log_aggregator: Arc::new(backend::services::log_aggregator::LogAggregator::new().0),
+        redis: redis::Client::open("redis://127.0.0.1/").unwrap(),
     });
 
     let app = Router::new()
@@ -46,9 +49,12 @@ async fn test_system_status_contract() {
 #[tokio::test]
 async fn test_profile_trigger_validation_success() {
     let state = Arc::new(AppState {
+        db: None,
         metrics_exporter: Arc::new(MetricsExporter::new()),
         error_manager: Arc::new(ErrorManager::new()),
         config_manager: Arc::new(ConfigManager::new(AppConfig::default())),
+        log_aggregator: Arc::new(backend::services::log_aggregator::LogAggregator::new().0),
+        redis: redis::Client::open("redis://127.0.0.1/").unwrap(),
     });
 
     let app = Router::new()
@@ -79,9 +85,12 @@ async fn test_profile_trigger_validation_success() {
 #[tokio::test]
 async fn test_profile_trigger_validation_failure() {
     let state = Arc::new(AppState {
+        db: None,
         metrics_exporter: Arc::new(MetricsExporter::new()),
         error_manager: Arc::new(ErrorManager::new()),
         config_manager: Arc::new(ConfigManager::new(AppConfig::default())),
+        log_aggregator: Arc::new(backend::services::log_aggregator::LogAggregator::new().0),
+        redis: redis::Client::open("redis://127.0.0.1/").unwrap(),
     });
 
     let app = Router::new()

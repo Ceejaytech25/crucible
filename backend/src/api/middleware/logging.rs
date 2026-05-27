@@ -100,13 +100,16 @@ mod tests {
         // Use connect_lazy for testing to avoid needing a real DB
         let db = PgPool::connect_lazy("postgres://localhost/test").unwrap();
         let redis = RedisClient::open("redis://localhost").unwrap();
+        let config = crate::config::AppConfig::default();
+        let config_manager = Arc::new(crate::config::reload::ConfigManager::new(config));
 
         let state = Arc::new(AppState {
             metrics_exporter,
             error_manager,
             log_aggregator,
-            db,
+            db: Some(db),
             redis,
+            config_manager,
         });
 
         let app = Router::new()

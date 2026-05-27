@@ -1141,3 +1141,32 @@ impl Validate for ProfileTriggerRequest {
 - `src/jobs/` – Background job definitions (Apalis)
 - `src/services/` – Business logic and external integrations
 - `src/telemetry/` – Observability and logging setup
+- `src/workers/` – Background worker modules, including the exponential backoff retry policy
+
+## Exponential Backoff Retry Policy
+
+Crucible includes a production-ready retry module (`src/workers/retry.rs`) to safely retry fallible asynchronous operations (such as SQLx database transactions, Redis calls, or external Stellar Horizon requests).
+
+### Features
+- **Exponential Backoff**: Dynamically increases backoff duration using the formula `base_delay * multiplier^attempt`.
+- **Full Jitter**: Implements the AWS recommended full jitter strategy to prevent thundering herd problems.
+- **Conditional Retries**: Abort retries early based on the specific error encountered using the `ShouldRetry` predicate.
+- **Observability**: Built-in structured tracing (`tracing` spans and logs) to track retry attempts, backoff durations, and exhausted errors.
+- **Serializable Configuration**: `RetryConfig` supports direct Serialization/Deserialization for config-driven retries.
+
+### Usage Example
+```rust
+use backend::workers::retry::{RetryPolicy, RetryError};
+
+async fn perform_stellar_tx() -> Result<(), MyError> {
+    let policy = RetryPolicy::default()
+        .with_base_delay(std::time::Duration::from_millis(100))
+        .with_max_delay(std::time::Duration::from_secs(10));
+
+    policy.retry(|| async {
+        // Fallible operation
+        send_transaction().await
+    }).await.map_err(|err| err.into_inner())
+}
+```
+

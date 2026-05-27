@@ -1,6 +1,7 @@
 pub mod reload;
 
 use serde::{Deserialize, Serialize};
+use std::env;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -43,12 +44,8 @@ impl Default for AppConfig {
             },
             log_level: "info".to_string(),
         }
-//! Application configuration.
-
-pub mod reload;
-
-use serde::Deserialize;
-use std::env;
+    }
+}
 
 /// Environment-based application configuration.
 #[derive(Debug, Deserialize, Clone)]

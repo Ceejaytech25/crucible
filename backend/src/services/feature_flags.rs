@@ -29,10 +29,7 @@ use redis::{AsyncCommands, Client as RedisClient};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use thiserror::Error;
-use tracing::{debug, info, warn};
 use tracing::{debug, info, warn, instrument};
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use crate::services::tracing::TracingService;
 
 // ---------------------------------------------------------------------------
@@ -132,11 +129,6 @@ impl FeatureFlagService {
 
         // Cache miss – query database with DB tracing
         debug!(key = %key, "Feature flag cache miss – querying database");
-        let row: Option<(bool,)> =
-            sqlx::query_as("SELECT enabled FROM feature_flags WHERE key = $1")
-                .bind(key)
-                .fetch_optional(&self.db)
-                .await?;
         
         let db_span = TracingService::db_query_span(
             "SELECT enabled FROM feature_flags WHERE key = $1",
@@ -253,8 +245,6 @@ impl FeatureFlagService {
     /// Create or update a feature flag.
     ///
     /// This method upserts the flag in PostgreSQL and invalidates the cache.
-    pub async fn set(&self, key: &str, enabled: bool, description: &str) -> Result<(), FlagError> {
-        sqlx::query(
     #[instrument(skip(self), fields(service.name = "FeatureFlagService", service.method = "set"))]
     pub async fn set(
         &self,
@@ -337,9 +327,6 @@ impl FeatureFlagService {
     /// Invalidate the Redis cache for a specific flag.
     #[instrument(skip(self), fields(service.name = "FeatureFlagService", service.method = "invalidate_cache"))]
     async fn invalidate_cache(&self, key: &str) -> Result<(), FlagError> {
-        let cache_key = format!("flag:{key}");
-        let mut conn = self.redis.get_multiplexed_async_connection().await?;
-        let deleted: i32 = conn.del(&cache_key).await?;
         let cache_key = format!("flag:{}", key);
         
         let redis_span = TracingService::redis_command_span("DEL", Some(&cache_key));
