@@ -125,6 +125,71 @@ Stored in PostgreSQL and cached in Redis with a 5-minute TTL.
 
 ---
 
+## ⏱️ Cron Job Scheduler
+
+The distributed cron job scheduler guarantees single execution per tick across multiple instances, provides exact timeouts with safe cancellation, tracks full execution history in PostgreSQL, and offers graceful shutdown.
+
+### Usage Example
+
+```rust
+use crucible_backend::workers::scheduler::{Scheduler, JobDefinition};
+use crucible_backend::workers::jobs::{HealthCheckJob, CleanupJob};
+use std::sync::Arc;
+
+let mut scheduler = Scheduler::new(pool.clone(), redis_client.clone());
+
+// Register a custom job
+scheduler.register(JobDefinition {
+    name: "health_check".to_string(),
+    cron_expr: "0 * * * * * *".to_string(), // Every minute
+    handler: Arc::new(HealthCheckJob),
+    timeout_secs: 10,
+    max_retries: 0,
+})?;
+
+let scheduler_handle = scheduler.start()?;
+
+// On application exit:
+// scheduler_handle.shutdown().await?;
+```
+
+### Implementing a New Job
+
+Implement the `JobHandler` trait for any struct.
+
+```rust
+use async_trait::async_trait;
+use crucible_backend::workers::scheduler::{JobHandler, JobContext};
+use crucible_backend::workers::error::JobError;
+
+pub struct MyJob;
+
+#[async_trait]
+impl JobHandler for MyJob {
+    async fn run(&self, ctx: JobContext) -> Result<(), JobError> {
+        // Business logic here
+        // The ctx contains the db pool, redis client, and run metadata
+        Ok(())
+    }
+}
+```
+
+### Built-in Jobs
+
+| Job | Default Cron | Purpose |
+|---|---|---|
+| `HealthCheckJob` | `0 * * * * * *` (Every minute) | Verifies Database and Redis connectivity. |
+| `CleanupJob` | `0 0 0 * * * *` (Daily at midnight) | Prunes `job_runs` history older than the configured retention period. |
+
+### Distributed Locking Behavior
+Before running a job, the scheduler issues `SET {job_name}:lock "1" NX PX {timeout_secs * 1000 + 5000}`. If the lock is already held by another running instance, the current instance skips the tick. The TTL ensures that if the node crashes hard without cleaning up the lock, it expires automatically shortly after the job would have timed out anyway.
+
+### Environment Variables
+- `SCHEDULER_ENABLED`: (bool) Set to `false` to prevent the scheduler from starting on this node.
+- `JOB_HISTORY_RETAIN_DAYS`: (integer) Days to retain job history before `CleanupJob` prunes it.
+
+---
+
 ## 🧪 Testing
 
 This project utilizes highly isolated, in-process integration testing leveraging Axum's `oneshot` capability.

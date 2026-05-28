@@ -415,6 +415,7 @@ dependencies = [
  "chrono",
  "config",
  "criterion",
+ "cron",
  "dotenvy",
  "futures-util",
  "http-body-util",
@@ -438,6 +439,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-test",
+ "tokio-util",
  "toml 0.8.23",
  "tower",
  "tower-http 0.5.2",
@@ -961,6 +963,17 @@ checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
 dependencies = [
  "cast",
  "itertools 0.10.5",
+]
+
+[[package]]
+name = "cron"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f8c3e73077b4b4a6ab1ea5047c37c57aee77657bc8ecd6f29b0af082d0b0c07"
+dependencies = [
+ "chrono",
+ "nom",
+ "once_cell",
 ]
 
 [[package]]

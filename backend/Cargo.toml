@@ -76,6 +76,11 @@ validator = { version = "0.19", features = ["derive"] }
 tower_governor = "0.4"
 mockall = { version = "0.13", optional = true }
 
+# Scheduler
+tokio-util = "0.7"
+cron = "0.12"
+async-trait = "0.1"
+
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["json"] }
 tokio-test = "0.4"
