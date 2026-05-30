@@ -1,6 +1,6 @@
 //! CONFIG APPROACH: Option A — layered config crate
 
-use crate::config::{AppConfig, Environment};
+use crate::config::{AppConfig, Environment, ObservabilityConfig};
 use std::str::FromStr;
 
 #[test]
@@ -67,6 +67,17 @@ fn test_load_development_config() {
             config.observability.init_tracing(Environment::Development);
         },
     );
+}
+
+#[test]
+fn test_production_observability_uses_json_logging() {
+    let observability = ObservabilityConfig {
+        log_level: "info".into(),
+        tracing_endpoint: None,
+        enable_metrics: false,
+    };
+
+    observability.init_tracing(Environment::Production);
 }
 
 #[test]
