@@ -1,9 +1,12 @@
 pub mod alerts;
+pub mod analytics_aggregator;
 pub mod business_metrics;
+pub mod circuit_breaker;
 pub mod log_alerts;
 pub mod dedup;
 pub mod cache_metrics;
 pub mod error_recovery;
+pub mod event_indexer;
 pub mod feature_flags;
 pub mod log_aggregator;
 pub mod sys_metrics;
