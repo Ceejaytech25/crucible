@@ -26,3 +26,4 @@ pub mod compilation;
 pub mod dependency_analyzer;
 pub mod contract_call_logger;
 pub mod compliance;
+pub mod rollback;
