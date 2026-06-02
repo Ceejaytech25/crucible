@@ -3,10 +3,11 @@ import { GasCostEstimator } from './components/GasCostEstimator';
 import { MultiChainDashboard } from './components/MultiChainDashboard';
 import { ContractAbiExplorer } from './components/ContractAbiExplorer';
 import { DeveloperOnboardingTutorial } from './components/DeveloperOnboardingTutorial';
-import { Terminal, ShieldAlert, Cpu, Globe, Zap, Settings, RefreshCw, BookOpen } from 'lucide-react';
+import { WalletConnector } from './components/WalletConnector';
+import { Terminal, ShieldAlert, Cpu, Globe, Zap, Settings, RefreshCw, BookOpen, Wallet } from 'lucide-react';
 import './App.css';
 
-type Tab = 'tutorial' | 'metrics' | 'multichain' | 'abi' | 'compiler' | 'dependencies';
+type Tab = 'tutorial' | 'metrics' | 'multichain' | 'abi' | 'compiler' | 'dependencies' | 'wallet';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('tutorial');
@@ -122,6 +123,14 @@ function App() {
             <ShieldAlert size={15} />
             Dep Analyzer
           </button>
+          <button
+            className={`nav-tab-btn ${activeTab === 'wallet' ? 'active' : ''}`}
+            onClick={() => setActiveTab('wallet')}
+            data-testid="tab-wallet"
+          >
+            <Wallet size={15} />
+            Wallet
+          </button>
         </nav>
       </header>
       
@@ -130,6 +139,7 @@ function App() {
         {activeTab === 'metrics' && <GasCostEstimator />}
         {activeTab === 'multichain' && <MultiChainDashboard />}
         {activeTab === 'abi' && <ContractAbiExplorer />}
+        {activeTab === 'wallet' && <WalletConnector />}
         
         {activeTab === 'compiler' && (
           <div className="compiler-tab-panel container-panel">
