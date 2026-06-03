@@ -6,7 +6,6 @@
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tracing::Level;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /// Observability configuration (logs, tracing, metrics).
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -28,33 +27,6 @@ impl ObservabilityConfig {
     /// Initializes the tracing subscriber globally based on the environment.
     /// Development uses a pretty formatter, while Staging/Production use JSON.
     pub fn init_tracing(&self, env: crate::config::Environment) {
-        let filter =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&self.log_level));
-
-        match env {
-            crate::config::Environment::Development => {
-                let fmt_layer = tracing_subscriber::fmt::layer()
-                    .pretty()
-                    .with_thread_ids(true)
-                    .with_target(true);
-
-                // try_init silently returns an error if a subscriber is already set, preventing panics in tests
-                let _ = tracing_subscriber::registry()
-                    .with(filter)
-                    .with(fmt_layer)
-                    .try_init();
-            }
-            crate::config::Environment::Staging | crate::config::Environment::Production => {
-                let fmt_layer = tracing_subscriber::fmt::layer()
-                    .json()
-                    .with_span_list(true)
-                    .with_current_span(true);
-
-                let _ = tracing_subscriber::registry()
-                    .with(filter)
-                    .with(fmt_layer)
-                    .try_init();
-            }
-        }
+        crate::utils::logger::init_tracing(&self.log_level, env);
     }
 }

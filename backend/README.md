@@ -446,6 +446,7 @@ domain-specific factories remain available.
 | `error_recovery` | Tracks retry state for failing tasks with configurable max retries |
 | `log_aggregator` | Async MPSC-based log pipeline; persists entries via a background worker |
 | `log_alerts` | Threshold-based alerting over the log pipeline with sliding-window evaluation |
+| `logger` | Structured logging bootstrap; pretty output in development and JSON logs in staging/production |
 | `feature_flags` | Feature flag management backed by PostgreSQL with Redis caching |
 | `alerts` | Critical-error notification dispatcher — deduplication, in-memory queue, Redis pub/sub |
 | `tracing` | OpenTelemetry tracing initialisation — wires `tracing` spans to an OTLP HTTP exporter |
