@@ -10,6 +10,7 @@ members = [
     "examples/time_locked_vault",
     "examples/emergency_stop",
     "examples/gasless",
+    "examples/cross-contract",
 ]
 resolver = "2"
 
