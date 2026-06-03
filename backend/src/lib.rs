@@ -5,11 +5,10 @@ pub mod error;
 pub mod jobs;
 pub mod services;
 pub mod telemetry;
-pub mod utils;
 pub mod workers;
 
 #[cfg(any(test, feature = "testutils"))]
 pub mod test_utils;
 
 pub use error::AppError;
-pub use workers::{CacheWarmWorker, JobProgressTracker, WorkerHealthMonitor};
+

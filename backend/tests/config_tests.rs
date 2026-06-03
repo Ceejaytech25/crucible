@@ -17,9 +17,12 @@ async fn test_config_get_endpoint() {
     let config = AppConfig::default();
     let config_manager = Arc::new(ConfigManager::new(config));
     let state = Arc::new(AppState {
+        db: None,
         metrics_exporter: Arc::new(MetricsExporter::new()),
         error_manager: Arc::new(ErrorManager::new()),
         config_manager: config_manager.clone(),
+        log_aggregator: Arc::new(backend::services::log_aggregator::LogAggregator::new().0),
+        redis: redis::Client::open("redis://127.0.0.1/").unwrap(),
     });
 
     let app = Router::new()
@@ -44,9 +47,12 @@ async fn test_config_reload_endpoint_no_file() {
     let config = AppConfig::default();
     let config_manager = Arc::new(ConfigManager::new(config));
     let state = Arc::new(AppState {
+        db: None,
         metrics_exporter: Arc::new(MetricsExporter::new()),
         error_manager: Arc::new(ErrorManager::new()),
         config_manager: config_manager.clone(),
+        log_aggregator: Arc::new(backend::services::log_aggregator::LogAggregator::new().0),
+        redis: redis::Client::open("redis://127.0.0.1/").unwrap(),
     });
 
     let app = Router::new()

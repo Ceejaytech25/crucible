@@ -4,44 +4,16 @@
 //! It collects and persists build-related metrics including compilation times, dependency counts,
 //! cache hit rates, and system resource usage. The service uses PostgreSQL for durability
 //! and Redis for high-performance caching.
-//!
-//! # Example
-//! ```rust,no_run
-//! use backend::services::sys_metrics::BuildMetricsService;
-//! use sqlx::PgPool;
-//! use redis::Client;
-//!
-//! # async fn example(pool: PgPool, redis: Client) -> anyhow::Result<()> {
-//! let service = BuildMetricsService::new(pool, redis);
-//!
-//! // Record a build metric
-//! let metric = BuildMetric {
-//!     project_name: "crucible".to_string(),
-//!     build_id: "build-123".to_string(),
-//!     build_status: BuildStatus::Success,
-//!     compilation_time_ms: 5000,
-//!     dependency_count: 42,
-//!     cache_hit_rate: Some(85.5),
-//!     cpu_usage: Some(75.2),
-//!     memory_usage_mb: Some(1024),
-//!     build_timestamp: Utc::now(),
-//! };
-//! service.record_build(metric).await?;
-//!
-//! // Query metrics
-//! let metrics = service.get_project_metrics("crucible", 10).await?;
-//! # Ok(())
-//! # }
-//! ```
 
 use chrono::{DateTime, Utc};
-use redis::{AsyncCommands, Client as RedisClient};
-use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use tracing::{info, debug, warn, error, instrument};
 use thiserror::Error;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
+use rust_decimal::Decimal;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use crate::services::tracing::TracingService;
 
 // ---------------------------------------------------------------------------
 // Error types
@@ -75,13 +47,9 @@ pub enum MetricsError {
     Internal(String),
 }
 
-use crate::services::tracing::TracingService;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-
-pub struct MetricsExporter {
-    current_metrics: Arc<RwLock<SystemMetrics>>,
-}
+// ---------------------------------------------------------------------------
+// Domain types
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SystemMetrics {
@@ -90,10 +58,6 @@ pub struct SystemMetrics {
     pub uptime: u64,
     pub timestamp: DateTime<Utc>,
 }
-
-// ---------------------------------------------------------------------------
-// Domain types
-// ---------------------------------------------------------------------------
 
 /// Build status enumeration.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -183,21 +147,11 @@ pub struct BuildMetricsService {
 
 impl BuildMetricsService {
     /// Create a new build metrics service.
-    ///
-    /// # Arguments
-    /// - `db`: PostgreSQL connection pool
-    /// - `redis`: Redis client
     pub fn new(db: PgPool, redis: RedisClient) -> Self {
         Self { db, redis }
     }
 
     /// Record a build metric.
-    ///
-    /// This method persists the metric to PostgreSQL and invalidates relevant cache entries.
-    ///
-    /// # Errors
-    /// Returns [`MetricsError::Database`] if the database operation fails.
-    /// Returns [`MetricsError::Redis`] if the cache invalidation fails.
     pub async fn record_build(&self, metric: BuildMetric) -> Result<Uuid, MetricsError> {
         let id = Uuid::new_v4();
         let status_str = metric.build_status.as_str();
@@ -237,17 +191,6 @@ impl BuildMetricsService {
     }
 
     /// Get metrics for a specific project.
-    ///
-    /// This method first checks Redis cache. On cache miss, it queries PostgreSQL
-    /// and populates the cache with a 5-minute TTL.
-    ///
-    /// # Arguments
-    /// - `project_name`: Name of the project
-    /// - `limit`: Maximum number of records to return
-    ///
-    /// # Errors
-    /// Returns [`MetricsError::Database`] if the database query fails.
-    /// Returns [`MetricsError::Redis`] if the cache operation fails.
     pub async fn get_project_metrics(
         &self,
         project_name: &str,
@@ -268,7 +211,7 @@ impl BuildMetricsService {
 
         // Cache miss – query database
         debug!(project = %project_name, "Build metrics cache miss – querying database");
-        let rows = sqlx::query(
+        let rows: Vec<(Uuid, String, String, String, i64, i32, Option<Decimal>, Option<Decimal>, Option<i64>, DateTime<Utc>)> = sqlx::query_as(
             r#"
             SELECT id, project_name, build_id, build_status, compilation_time_ms,
                    dependency_count, cache_hit_rate, cpu_usage, memory_usage_mb, build_timestamp
@@ -325,12 +268,6 @@ impl BuildMetricsService {
     }
 
     /// Get aggregated metrics summary for a project.
-    ///
-    /// # Arguments
-    /// - `project_name`: Name of the project
-    ///
-    /// # Errors
-    /// Returns [`MetricsError::Database`] if the database query fails.
     pub async fn get_project_summary(
         &self,
         project_name: &str,
@@ -360,10 +297,9 @@ impl BuildMetricsService {
                 avg_cache_hit_rate,
             )) => {
                 let success_rate = if total_builds > 0 {
-                    Decimal::from(successful_builds) / Decimal::from(total_builds)
-                        * Decimal::from(100)
+                    Decimal::from(successful_builds) / Decimal::from(total_builds) * Decimal::from(100)
                 } else {
-                    Decimal::ZERO
+                    Decimal::from(0)
                 };
 
                 Ok(BuildMetricsSummary {
@@ -371,7 +307,7 @@ impl BuildMetricsService {
                     total_builds,
                     successful_builds,
                     failed_builds,
-                    avg_compilation_time_ms: avg_compilation_time.unwrap_or(Decimal::ZERO),
+                    avg_compilation_time_ms: avg_compilation_time.unwrap_or_else(|| Decimal::from(0)),
                     success_rate,
                     avg_cache_hit_rate,
                 })
@@ -381,14 +317,8 @@ impl BuildMetricsService {
     }
 
     /// Get recent build metrics across all projects.
-    ///
-    /// # Arguments
-    /// - `limit`: Maximum number of records to return
-    ///
-    /// # Errors
-    /// Returns [`MetricsError::Database`] if the database query fails.
     pub async fn get_recent_metrics(&self, limit: i64) -> Result<Vec<BuildMetric>, MetricsError> {
-        let rows = sqlx::query(
+        let rows: Vec<(Uuid, String, String, String, i64, i32, Option<Decimal>, Option<Decimal>, Option<i64>, DateTime<Utc>)> = sqlx::query_as(
             r#"
             SELECT id, project_name, build_id, build_status, compilation_time_ms,
                    dependency_count, cache_hit_rate, cpu_usage, memory_usage_mb, build_timestamp
@@ -433,12 +363,6 @@ impl BuildMetricsService {
     }
 
     /// Delete all metrics for a project.
-    ///
-    /// # Arguments
-    /// - `project_name`: Name of the project
-    ///
-    /// # Errors
-    /// Returns [`MetricsError::Database`] if the database operation fails.
     pub async fn delete_project_metrics(&self, project_name: &str) -> Result<u64, MetricsError> {
         let result = sqlx::query("DELETE FROM build_metrics WHERE project_name = $1")
             .bind(project_name)
@@ -459,8 +383,7 @@ impl BuildMetricsService {
     /// Invalidate Redis cache for a specific project.
     async fn invalidate_project_cache(&self, project_name: &str) -> Result<(), MetricsError> {
         let mut conn = self.redis.get_multiplexed_async_connection().await?;
-
-        // Delete all cache keys for this project using SCAN
+        
         let pattern = format!("build_metrics:{}:*", project_name);
         let keys: Vec<String> = redis::cmd("KEYS")
             .arg(&pattern)
@@ -468,13 +391,22 @@ impl BuildMetricsService {
             .await?;
 
         if !keys.is_empty() {
-            for key in &keys {
-                let _: () = conn.del(key).await?;
+            let key_count = keys.len();
+            for key in keys {
+                let _: () = conn.del(&key).await?;
             }
-            debug!(project = %project_name, count = keys.len(), "Invalidated project cache");
+            debug!(project = %project_name, count = key_count, "Invalidated project cache");
         }
         Ok(())
     }
+}
+
+// ---------------------------------------------------------------------------
+// MetricsExporter
+// ---------------------------------------------------------------------------
+
+pub struct MetricsExporter {
+    current_metrics: Arc<RwLock<SystemMetrics>>,
 }
 
 impl Default for MetricsExporter {
@@ -493,6 +425,7 @@ impl MetricsExporter {
         }
     }
 
+    #[instrument(skip(self), fields(service.name = "MetricsExporter", service.method = "update_metrics"))]
     pub async fn update_metrics(&self, cpu: f64, mem: u64, uptime: u64) {
         let span = TracingService::service_method_span("MetricsExporter", "update_metrics");
         let _enter = span.enter();
@@ -523,7 +456,6 @@ impl MetricsExporter {
         loop {
             interval.tick().await;
             let uptime = (Utc::now() - start_time).num_seconds() as u64;
-            // Simulated metrics collection
             exporter
                 .update_metrics(12.5, 1024 * 1024 * 512, uptime)
                 .await;

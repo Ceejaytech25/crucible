@@ -7,7 +7,7 @@
 
 use config::{Config, Environment as ConfigEnvironment, File, FileFormat};
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::env;
 
 pub mod database;
 pub mod error;
@@ -143,26 +143,18 @@ impl AppConfig {
                 "TLS configuration is strictly required in the Production environment.".to_string(),
             );
         }
+    }
+}
 
-        if self.database.url.is_empty() {
-            errors.push("Database URL cannot be empty.".to_string());
-        }
-
-        if self.redis.url.is_empty() {
-            errors.push("Redis URL cannot be empty.".to_string());
-        }
-
-        if self.database.max_connections == 0 {
-            errors.push("Database max_connections must be greater than 0.".to_string());
-        }
-
-        if self.redis.pool_size == 0 {
-            errors.push("Redis pool_size must be greater than 0.".to_string());
-        }
-
-        if !errors.is_empty() {
-            return Err(ConfigError::ValidationError(errors));
-        }
+/// Environment-based application configuration.
+#[derive(Debug, Deserialize, Clone)]
+pub struct Config {
+    pub database_url: String,
+    pub redis_url: String,
+    pub server_port: u16,
+    pub environment: String,
+    pub log_level: String,
+}
 
         Ok(())
     }

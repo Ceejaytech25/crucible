@@ -30,7 +30,8 @@ use redis::{AsyncCommands, Client as RedisClient};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use thiserror::Error;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, warn, instrument};
+use crate::services::tracing::TracingService;
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -131,12 +132,7 @@ impl FeatureFlagService {
 
         // Cache miss – query database with DB tracing
         debug!(key = %key, "Feature flag cache miss – querying database");
-        let row: Option<(bool,)> =
-            sqlx::query_as("SELECT enabled FROM feature_flags WHERE key = $1")
-                .bind(key)
-                .fetch_optional(&self.db)
-                .await?;
-
+        
         let db_span = TracingService::db_query_span(
             "SELECT enabled FROM feature_flags WHERE key = $1",
             "postgres",

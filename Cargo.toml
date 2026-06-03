@@ -6,7 +6,6 @@ members = [
     "examples/counter",
     "examples/token",
     "examples/vesting",
-    "contracts/supply_chain",
 ]
 resolver = "2"
 

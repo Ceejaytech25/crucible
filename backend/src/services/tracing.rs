@@ -3,25 +3,37 @@
 //! This module provides the centralized tracing hub for the Crucible backend,
 //! implementing OTLP exporter with Jaeger/Zipkin compatibility, semantic conventions,
 //! sampling strategies, and proper error propagation.
-//!
-//! # Features
-//! - OTLP/gRPC exporter (Jaeger/Zipkin compatible)
-//! - Head-based and tail-based sampling strategies
-//! - Semantic conventions for HTTP, DB, and service operations
-//! - Resource detection with deployment environment
-//! - Span limits and baggage propagation
-//! - Zero-overhead when tracing is disabled
 
+use opentelemetry::KeyValue;
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::trace::{Config, RandomIdGenerator, Sampler, TracerProvider};
+use opentelemetry_sdk::Resource;
+use opentelemetry_semantic_conventions::resource;
 use std::time::Duration;
 use tracing::{info_span, warn};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{EnvFilter, Registry};
 
-/// Central tracing service for initialization and span creation
-pub struct TracingService;
+// ---------------------------------------------------------------------------
+// Error type
+// ---------------------------------------------------------------------------
 
-/// Configuration for the tracing service
-#[derive(Clone, Debug)]
+/// Errors that can occur while initialising the tracing stack.
+#[derive(Debug, thiserror::Error)]
+pub enum TracingError {
+    #[error("Failed to build OTLP span exporter: {0}")]
+    ExporterBuild(String),
+    #[error("Failed to install tracing subscriber: {0}")]
+    SubscriberInit(String),
+}
+
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+/// Configuration for the OpenTelemetry tracing stack.
+#[derive(Debug, Clone)]
 pub struct TracingConfig {
     /// OTLP exporter endpoint (e.g., "http://jaeger:4317")
     pub otlp_endpoint: String,
@@ -90,9 +102,55 @@ impl TracingConfig {
     }
 }
 
+// ---------------------------------------------------------------------------
+// TracingService
+// ---------------------------------------------------------------------------
+
+/// Central tracing service for initialization and span creation
+pub struct TracingService;
+
 impl TracingService {
     /// Initialize the global tracer provider with OTLP exporter
     pub fn init(config: TracingConfig) -> anyhow::Result<()> {
+        let resource = Resource::new(vec![
+            KeyValue::new(resource::SERVICE_NAME, config.service_name.clone()),
+            KeyValue::new(resource::SERVICE_VERSION, config.service_version.clone()),
+            KeyValue::new(resource::DEPLOYMENT_ENVIRONMENT, config.environment.clone()),
+            KeyValue::new("service.namespace", "crucible"),
+        ]);
+
+        let sampler = if config.environment == "production" {
+            Sampler::ParentBased(Box::new(
+                Sampler::TraceIdRatioBased(config.sampling_ratio),
+            ))
+        } else {
+            Sampler::AlwaysOn
+        };
+
+        let trace_config = Config::default()
+            .with_resource(resource)
+            .with_sampler(sampler)
+            .with_id_generator(RandomIdGenerator::default())
+            .with_max_attributes_per_span(config.max_attributes_per_span)
+            .with_max_events_per_span(config.max_events_per_span)
+            .with_max_links_per_span(config.max_links_per_span);
+
+        let tracer_provider = opentelemetry_otlp::new_pipeline()
+            .tracing()
+            .with_exporter(
+                opentelemetry_otlp::new_exporter()
+                    .tonic()
+                    .with_endpoint(&config.otlp_endpoint)
+                    .with_timeout(Duration::from_secs(10)),
+            )
+            .with_trace_config(trace_config)
+            .install_batch(opentelemetry_sdk::runtime::Tokio)
+            .map_err(|e| anyhow::anyhow!("Failed to install OTLP exporter: {}", e))?;
+
+        let tracer = tracer_provider.tracer("crucible-backend");
+
+        let telemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+
         let subscriber = Registry::default()
             .with(
                 EnvFilter::try_from_default_env()
@@ -188,6 +246,10 @@ impl TracingService {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -205,6 +267,26 @@ mod tests {
             .with_environment("production".to_string());
         assert_eq!(config.environment, "production");
         assert_eq!(config.sampling_ratio, 0.01);
+    }
+
+    #[test]
+    fn test_tracing_config_staging_sample_rate() {
+        let config = TracingConfig::default().with_environment("staging".to_string());
+        assert_eq!(config.sampling_ratio, 0.1);
+    }
+
+    #[test]
+    fn test_tracing_config_dev_sample_rate() {
+        let config = TracingConfig::default().with_environment("dev".to_string());
+        assert_eq!(config.sampling_ratio, 1.0);
+    }
+
+    #[test]
+    fn test_config_clone() {
+        let cfg = TracingConfig::new("svc".to_string(), "1.0.0".to_string());
+        let cloned = cfg.clone();
+        assert_eq!(cfg.service_name, cloned.service_name);
+        assert_eq!(cfg.otlp_endpoint, cloned.otlp_endpoint);
     }
 
     #[test]
@@ -248,5 +330,12 @@ mod tests {
 
         let config = TracingConfig::default().with_sampling_ratio(-0.5);
         assert_eq!(config.sampling_ratio, 0.0);
+    }
+
+    #[test]
+    fn test_with_otlp_endpoint() {
+        let config = TracingConfig::default()
+            .with_otlp_endpoint("http://collector:4317".to_string());
+        assert_eq!(config.otlp_endpoint, "http://collector:4317");
     }
 }
