@@ -259,6 +259,14 @@ async fn main() -> Result<(), anyhow::Error> {
                 )
                     get(backend::api::handlers::contracts::get_contract_logs),
                 )
+                .route(
+                    "/upgrade-plan",
+                    post(backend::api::handlers::contracts::create_upgrade_plan),
+                )
+                )
+                    post(backend::api::handlers::contracts::log_contract_call)
+                        .get(backend::api::handlers::contracts::get_contract_logs),
+                )
                     "/templates",
                     get(backend::api::handlers::contracts::get_templates),
                 )

@@ -12,6 +12,7 @@ pub mod contract_benchmark;
 pub mod contract_call_logger;
 pub mod contract_monitor;
 pub mod contract_registry;
+pub mod contract_upgrade;
 pub mod dedup;
 pub mod dependency_analyzer;
 pub mod doc_generator;

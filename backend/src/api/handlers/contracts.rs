@@ -16,6 +16,7 @@ use crate::services::contract_test_results::{
 use crate::services::contract_versioning::{
     ContractVersioningService, CreateContractVersionRequest, VersionDiffRequest,
 };
+use crate::services::contract_upgrade::{ContractUpgradeManager, ContractUpgradeRequest};
 use crate::services::dependency_analyzer::DependencyAnalyzer;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -29,6 +30,18 @@ pub struct CompileRequest {
 #[serde(rename_all = "camelCase")]
 pub struct AnalyzeRequest {
     pub cargo_toml: String,
+}
+
+/// POST /api/v1/contracts/upgrade-plan
+pub async fn create_upgrade_plan(
+    Json(payload): Json<ContractUpgradeRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let service = ContractUpgradeManager::new();
+    let result = service
+        .plan_upgrade(payload)
+        .map_err(|err| AppError::ValidationError(err.to_string()))?;
+
+    Ok(Json(ApiResponse::new(result)))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
