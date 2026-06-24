@@ -452,6 +452,22 @@ impl MockEnvBuilder {
         self
     }
 
+    /// Register a contract at a deterministic address.
+    ///
+    /// This allows tests to associate a contract type with a known `Address` so
+    /// that callers can look up the address deterministically via
+    /// `env.contract_id::<C>()`. Note: this registers the mapping in the
+    /// `MockEnv` but does not deploy the contract instance to the underlying
+    /// `soroban_sdk::Env`. Use `with_contract` if you need the instance to be
+    /// available for calls.
+    pub fn with_contract_at<C>(self, id: &Address) -> Self
+    where
+        C: soroban_sdk::testutils::ContractFunctionSet + Default + 'static,
+    {
+        self.env.register_contract::<C>(id.clone());
+        self
+    }
+
     /// Add a named account with XLM balance.
     pub fn with_account(mut self, name: &str, balance: Stroops) -> Self {
         self.account_configs.push((name.to_string(), balance));
